@@ -14,10 +14,8 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
 # 1. 한국경제 뉴스 데이터 수집 함수
+# main.py 내의 해당 부분을 이렇게 수정하세요
 def get_news_content():
-    # 한국경제 RSS 주소
-    # 경제: https://www.hankyung.com/feed/economy
-    # 증권: https://www.hankyung.com/feed/finance
     urls = [
         "https://www.hankyung.com/feed/economy",
         "https://www.hankyung.com/feed/finance"
@@ -26,13 +24,19 @@ def get_news_content():
     news_text = ""
     for url in urls:
         feed = feedparser.parse(url)
-        # 각 섹션의 제목(경제/증권) 표시
         category = "경제" if "economy" in url else "증권"
         news_text += f"\n--- [{category} 섹션 주요 뉴스] ---\n"
         
-        for entry in feed.entries[:10]: # 각 섹션당 상위 10개 기사
-            # 한국경제 RSS는 summary 항목에 본문 요약이 잘 포함되어 있습니다.
-            news_text += f"제목: {entry.title}\n내용: {entry.summary}\n\n"
+        for entry in feed.entries[:10]:
+            # 핵심 수정: .summary 대신 .get() 사용 (데이터가 없으면 빈 문자열)
+            title = entry.get('title', '제목 없음')
+            summary = entry.get('summary', '내용 없음')
+            
+            # 한경 RSS 특성에 따라 'description' 필드에 내용이 들어있을 수도 있으므로 보강
+            if summary == '내용 없음' or not summary:
+                summary = entry.get('description', '내용 없음')
+                
+            news_text += f"제목: {title}\n내용: {summary}\n\n"
             
     return news_text
 
