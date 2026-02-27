@@ -46,7 +46,10 @@ def get_gemini_summary(news_data):
         raise ValueError("GEMINI_API_KEY가 설정되지 않았습니다.")
         
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    
+    # 수정 포인트: 모델명 앞에 'models/'를 붙이거나, 최신 명칭인 'gemini-1.5-flash-latest' 사용
+    # 여기서는 가장 범용적인 'gemini-1.5-flash'를 사용하되 설정 방식을 점검합니다.
+    model = genai.GenerativeModel(model_name='gemini-1.5-flash')
     
     prompt = f"""
     너는 금융 및 증권 전문 애널리스트야. 제공된 한국경제 뉴스 목록을 읽고, 
