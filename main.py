@@ -41,32 +41,43 @@ def get_news_content():
     return news_text
 
 # 2. Gemini AI 요약 함수 (이전과 동일)
+# main.py의 get_gemini_summary 함수를 이렇게 수정해 보세요
+
 def get_gemini_summary(news_data):
     if not GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY가 설정되지 않았습니다.")
         
+    # API 키 설정
     genai.configure(api_key=GEMINI_API_KEY)
     
-    # 수정 포인트: 모델명 앞에 'models/'를 붙이거나, 최신 명칭인 'gemini-1.5-flash-latest' 사용
-    # 여기서는 가장 범용적인 'gemini-1.5-flash'를 사용하되 설정 방식을 점검합니다.
-    model = genai.GenerativeModel(model_name='gemini-1.5-flash')
-    
-    prompt = f"""
-    너는 금융 및 증권 전문 애널리스트야. 제공된 한국경제 뉴스 목록을 읽고, 
-    투자자가 오늘 아침 반드시 체크해야 할 '핵심 브리핑'을 작성해줘.
-    
-    [지침]
-    1. 시장 전체의 흐름을 관통하는 가장 중요한 이슈 3개를 선정할 것.
-    2. 각 이슈별로 투자자가 주의해야 할 점이나 기회 요인을 분석할 것.
-    3. 텔레그램 가독성을 위해 적절한 이모지와 불렛포인트를 사용할 것.
-    4. 분석은 전문적이되 말투는 친절하게 할 것.
+    # 모델명 앞에 'models/'를 명시하거나 최신 식별자 사용
+    # gemini-1.5-flash-latest 혹은 gemini-1.5-flash를 시도합니다.
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        
+        prompt = f"""
+        너는 금융 및 증권 전문 애널리스트야. 제공된 한국경제 뉴스 목록을 읽고, 
+        투자자가 오늘 아침 반드시 체크해야 할 '핵심 브리핑'을 작성해줘.
+        
+        [지침]
+        1. 시장 전체의 흐름을 관통하는 가장 중요한 이슈 3개를 선정할 것.
+        2. 각 이슈별로 투자자가 주의해야 할 점이나 기회 요인을 분석할 것.
+        3. 텔레그램 가독성을 위해 적절한 이모지와 불렛포인트를 사용할 것.
 
-    [뉴스 데이터]
-    {news_data}
-    """
-    
-    response = model.generate_content(prompt)
-    return response.text
+        [뉴스 데이터]
+        {news_data}
+        """
+        
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        # 혹시 모델명이 문제라면 다른 이름으로 한 번 더 시도 (안전 장치)
+        if "404" in str(e):
+            model = genai.GenerativeModel('gemini-pro') # 기본 모델로 우회
+            response = model.generate_content(prompt)
+            return response.text
+        else:
+            raise e
 
 # 3. 텔레그램 전송 함수 (이전과 동일)
 async def send_telegram(message):
