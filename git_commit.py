@@ -2,7 +2,7 @@ import subprocess
 import sys
 
 REMOTE = "origin"
-BRANCH = "masterdjq"
+BRANCH = "master"
 
 def run(cmd):
     result = subprocess.run(cmd)
