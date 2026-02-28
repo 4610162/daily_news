@@ -135,34 +135,34 @@ async def send_telegram_summary(summary_text, site_url):
     
     # 요약문 상단에 배치
     message = (
-        f"📅 *오늘의 경제 브리핑 ({datetime.now().strftime('%m/%d')})*\n\n"
+        f"📅 <b>오늘의 경제 브리핑 ({datetime.now().strftime('%m/%d')})</b>\n\n"
         f"{summary_text}\n\n" # Gemini에게 3줄 요약을 별도로 요청해서 넣으면 베스트!
-        f"🔗 [전체 보고서 읽기]({site_url})"
+        f"🔗 <a href='{site_url}'>상세 분석 보고서 보기</a>"
     )
     
     await bot.send_message(
         chat_id=CHAT_ID, 
         text=message, 
-        parse_mode='Markdown' # 링크가 깔끔하게 걸리도록 설정
+        parse_mode='HTML' # 링크가 깔끔하게 걸리도록 설정
     )
 
-def post_to_github_issues(title, content):
-    gh_token = os.getenv("GH_TOKEN")
-    repo_name = "4610162/daily_news" # 예: 4610162/daily_news
+# def post_to_github_issues(title, content):
+#     gh_token = os.getenv("GH_TOKEN")
+#     repo_name = "4610162/daily_news" # 예: 4610162/daily_news
     
-    if not gh_token:
-        print("⚠️ GitHub 토큰이 없어 이슈 게시를 건너뜁니다.")
-        return
+#     if not gh_token:
+#         print("⚠️ GitHub 토큰이 없어 이슈 게시를 건너뜁니다.")
+#         return
 
-    g = Github(gh_token)
-    repo = g.get_repo(repo_name)
+#     g = Github(gh_token)
+#     repo = g.get_repo(repo_name)
     
-    # 새로운 이슈 생성 (이것이 블로그 포스팅 역할을 함)
-    new_issue =repo.create_issue(title=title, body=content)
-    print(f"🚀 GitHub Issues에 보고서 게시 완료!")
+#     # 새로운 이슈 생성 (이것이 블로그 포스팅 역할을 함)
+#     new_issue =repo.create_issue(title=title, body=content)
+#     print(f"🚀 GitHub Issues에 보고서 게시 완료!")
 
-    # 생성된 이슈의 웹 주소(html_url)를 반환합니다.
-    return new_issue.html_url
+#     # 생성된 이슈의 웹 주소(html_url)를 반환합니다.
+#     return new_issue.html_url
 
 async def main():
     try:
@@ -201,7 +201,7 @@ async def main():
             f"🔗 *상세 분석 보고서 보기:*\n{final_url}"
         )
         
-        await bot.send_message(chat_id=CHAT_ID, text=final_message, parse_mode='Markdown')
+        await bot.send_message(chat_id=CHAT_ID, text=final_message, parse_mode='HTML')
         print("✅ 텔레그램 전송 완료!")
 
     except Exception as e:
