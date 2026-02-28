@@ -104,7 +104,7 @@ async def create_and_save_report(news_items, analysis, issue_url=None):
         f.write(md_content)
     
     # 웹사이트 URL 반환 (사용자 계정/레포 이름에 맞춰 설정)
-    site_url = f"https://4610162.github.io/daily_news/reports/{today_str}.md"
+    site_url = f"https://4610162.github.io/daily_news/reports/{today_str}"
     return site_url, md_content # 본문도 함께 반환하여 main에서 활용
 
 # 텔레그램 상단에 노출할 3줄 핵심 요약 생성
