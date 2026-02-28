@@ -1,0 +1,15 @@
+site_name: Daily AI 경제 리포트
+theme:
+  name: material  # 매우 예쁜 기본 테마
+  language: ko
+  palette:
+    primary: indigo
+    accent: indigo
+  features:
+    - navigation.tabs  # 상단 탭 메뉴
+    - search.highlight # 검색 결과 하이라이트
+
+nav:
+  - Home: index.md
+  - Daily Reports: 
+      - reports/  # reports 폴더 내의 md 파일들을 자동으로 나열하게 설정 가능
