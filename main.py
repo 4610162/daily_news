@@ -188,7 +188,7 @@ async def main():
         report_body += full_analysis
 
         # 4. GitHub Issues에 아카이빙 (웹페이지 역할)
-        issue_url = post_to_github_issues(report_title, report_body)
+        # issue_url = post_to_github_issues(report_title, report_body)
 
         # 5. 텔레그램 전송 (함수 내부에서 전송 로직 수행)
         # 만약 웹사이트가 아직 준비 안됐다면 issue_url을 사용하세요.
