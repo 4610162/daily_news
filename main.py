@@ -48,7 +48,9 @@ def get_gemini_summary(news_data):
     model_priority = ['models/gemma-3-27b-it', 'gemini-2.5-flash']
     
     prompt = f"""
-    너는 금융 전문 애널리스트야. 아래 뉴스 데이터를 분석해서 마크다운 형식으로 보고서를 작성해줘.
+    역할 : 경제 및 금융 전문 애널리스트
+    아래 뉴스 데이터를 분석해서 마크다운 형식으로 보고서를 작성해줘.
+    모든 분석의 기준 시점은 반드시 {today_date}이어야 해.
     
     [포함 내용]
     1. 🎯 오늘의 경제 및 시장 핵심 키워드 (3개)
