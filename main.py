@@ -83,9 +83,11 @@ def get_gemini_summary(news_data):
 
     return "❌ 모든 가용 모델의 호출에 실패했습니다."
 
-async def create_and_send_md_report(news_items, analysis, issue_url=None):
+async def create_and_save_report(news_items, analysis, issue_url=None):
     today_str = datetime.now().strftime("%Y-%m-%d")
-    file_name = f"Economic_Report_{today_str}.md"
+    # 폴더 구조를 docs/reports/2026-02-28.md 형태로 생성
+    os.makedirs("docs/reports", exist_ok=True)
+    file_path = f"docs/reports/{today_str}.md"  # 변수명 통일
     
     # 1. 마크다운 내용 구성
     md_content = f"# 📑 데일리 경제 브리핑 보고서 ({today_str})\n\n"
@@ -98,28 +100,51 @@ async def create_and_send_md_report(news_items, analysis, issue_url=None):
     md_content += analysis
     
     # 2. 로컬에 파일 저장
-    with open(file_name, "w", encoding="utf-8") as f:
+    with open(file_path, "w", encoding="utf-8") as f:
         f.write(md_content)
     
-    # 3. 텔레그램 캡션 구성 (링크가 있으면 추가)
-    caption_text = f"📅 {today_str} 경제 브리핑 보고서가 발간되었습니다."
-    if issue_url:
-        caption_text += f"\n\n🌐 웹에서 보기(아카이브):\n{issue_url}"
+    # 웹사이트 URL 반환 (사용자 계정/레포 이름에 맞춰 설정)
+    site_url = f"https://4610162.github.io/daily_news/reports/{today_str}.md"
+    return site_url, md_content # 본문도 함께 반환하여 main에서 활용
+
+# 텔레그램 상단에 노출할 3줄 핵심 요약 생성
+def get_telegram_brief(news_data):
+    if not GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY가 설정되지 않았습니다.")
+        
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel('models/gemma-3-27b-it') # RPD 고려하여 gemma 3 27b 모델 사용
     
-    # 4. 텔레그램 전송 (한 번만 수행)
+    prompt = f"""
+    다음 뉴스 데이터를 바탕으로 오늘 가장 중요한 경제 소식 3가지를 요약해줘.
+    - 각 소식은 한 줄로 작성할 것.
+    - 이모지를 적절히 섞어서 친근하게 작성할 것.
+    - 전체 리포트를 읽고 싶게 만드는 핵심 내용 위주로 작성할 것.
+    - 한국어로 작성할 것.
+    
+    뉴스 데이터:
+    {news_data}
+    """
+    
+    response = model.generate_content(prompt)
+    return response.text.strip()
+
+# 텔레그램 전송 부분 수정
+async def send_telegram_summary(summary_text, site_url):
     bot = Bot(token=TELEGRAM_TOKEN)
-    try:
-        with open(file_name, "rb") as f:
-            await bot.send_document(
-                chat_id=CHAT_ID, 
-                document=f, 
-                caption=caption_text
-            )
-        print("✅ 텔레그램 보고서 전송 완료!")
-    except Exception as e:
-        print(f"❌ 텔레그램 전송 중 에러: {e}")
     
-    return file_name
+    # 요약문 상단에 배치
+    message = (
+        f"📅 *오늘의 경제 브리핑 ({datetime.now().strftime('%m/%d')})*\n\n"
+        f"{summary_text}\n\n" # Gemini에게 3줄 요약을 별도로 요청해서 넣으면 베스트!
+        f"🔗 [전체 보고서 읽기]({site_url})"
+    )
+    
+    await bot.send_message(
+        chat_id=CHAT_ID, 
+        text=message, 
+        parse_mode='Markdown' # 링크가 깔끔하게 걸리도록 설정
+    )
 
 def post_to_github_issues(title, content):
     gh_token = os.getenv("GH_TOKEN")
@@ -143,11 +168,14 @@ async def main():
     try:
         # 1. 데이터 가져오기
         news_items, news_text_for_ai = get_news_content()
-        analysis = get_gemini_summary(news_text_for_ai)
+        full_analysis = get_gemini_summary(news_text_for_ai)
+        telegram_brief = get_telegram_brief(news_text_for_ai)
 
         # 2. 날짜 및 제목 설정
         today_str = datetime.now().strftime("%Y-%m-%d")
         report_title = f"📑 데일리 경제 브리핑 ({today_str})"
+
+        site_url, report_body = await create_and_save_report(news_items, full_analysis)
         
         # 3. 마크다운 본문(report_body) 내용 구성 (내용 구성 누락 수정)
         report_body = f"# {report_title}\n\n"
@@ -157,18 +185,27 @@ async def main():
         
         report_body += "\n---\n\n"
         report_body += "## 🤖 AI 분석 및 시장 전망\n"
-        report_body += analysis
+        report_body += full_analysis
 
         # 4. GitHub Issues에 아카이빙 (웹페이지 역할)
         issue_url = post_to_github_issues(report_title, report_body)
 
         # 5. 텔레그램 전송 (함수 내부에서 전송 로직 수행)
-        await create_and_send_md_report(news_items, analysis, issue_url)
-        print("✅ 모든 작업 완료!")
+        # 만약 웹사이트가 아직 준비 안됐다면 issue_url을 사용하세요.
+        final_url = site_url if site_url else issue_url
+
+        bot = Bot(token=TELEGRAM_TOKEN)
+        final_message = (
+            f"🚀 *오늘의 경제 브리핑 ({today_str})*\n\n"
+            f"{telegram_brief}\n\n"
+            f"🔗 *상세 분석 보고서 보기:*\n{final_url}"
+        )
+        
+        await bot.send_message(chat_id=CHAT_ID, text=final_message, parse_mode='Markdown')
+        print("✅ 텔레그램 전송 완료!")
 
     except Exception as e:
-        # except 문도 try와 들여쓰기가 맞아야 합니다.
-        print(f"❌ 에러 발생: {e}")
+        print(f"❌ 오류 발생: {e}")
 
 if __name__ == "__main__":
     asyncio.run(main())
