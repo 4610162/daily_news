@@ -40,6 +40,9 @@ def get_gemini_summary(news_data):
         raise ValueError("GEMINI_API_KEY가 설정되지 않았습니다.")
         
     genai.configure(api_key=GEMINI_API_KEY)
+
+    # 💡 현재 날짜를 구해서 프롬프트에 넣어줍니다.
+    today_date = datetime.now().strftime("%Y년 %m월 %d일")
     
     # 모델 우선순위 설정: 1순위 Gemini(고성능/20회), 2순위 Gemma(무제한급)
     model_priority = ['models/gemma-3-27b-it', 'gemini-2.5-flash']
@@ -48,7 +51,7 @@ def get_gemini_summary(news_data):
     너는 금융 전문 애널리스트야. 아래 뉴스 데이터를 분석해서 마크다운 형식으로 보고서를 작성해줘.
     
     [포함 내용]
-    1. 🎯 오늘의 시장 핵심 키워드 (3개)
+    1. 🎯 오늘의 경제 및 시장 핵심 키워드 (3개)
     2. 📈 종합 분석 및 투자 전략 (심도 있게)
     3. ⚠️ 주의 깊게 봐야 할 지표나 일정
     
@@ -128,7 +131,7 @@ def post_to_github_issues(title, content):
     repo = g.get_repo(repo_name)
     
     # 새로운 이슈 생성 (이것이 블로그 포스팅 역할을 함)
-    repo.create_issue(title=title, body=content)
+    new_issue =repo.create_issue(title=title, body=content)
     print(f"🚀 GitHub Issues에 보고서 게시 완료!")
 
     # 생성된 이슈의 웹 주소(html_url)를 반환합니다.
@@ -167,4 +170,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    
