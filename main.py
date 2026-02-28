@@ -2,7 +2,7 @@ import os
 import feedparser
 import google.generativeai as genai
 import asyncio
-# from telegram import Bot
+from telegram import Bot
 from datetime import datetime
 from dotenv import load_dotenv
 from github import Github
