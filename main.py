@@ -45,7 +45,7 @@ def get_gemini_summary(news_data):
     today_date = datetime.now().strftime("%Y년 %m월 %d일")
     
     # 모델 우선순위 설정: 1순위 Gemini(고성능/20회), 2순위 Gemma(무제한급)
-    model_priority = ['models/gemma-3-27b-it', 'gemini-2.5-flash']
+    model_priority = ['gemini-2.5-flash', 'models/gemma-3-27b-it']
     
     prompt = f"""
     역할 : 경제 및 금융 전문 애널리스트
