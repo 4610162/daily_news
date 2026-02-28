@@ -37,6 +37,17 @@ jobs:
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git add docs/
-        git commit -m "Update daily report $(date +'%Y-%m-%d')" || echo "No changes to commit"
-        git push
+        
+        # docs 폴더가 없으면 에러가 나므로 강제로 확인
+        mkdir -p docs/reports
+        
+        # 변경사항 반영
+        git add . 
+        
+        # 커밋할 내용이 있을 때만 커밋 및 푸시
+        if [ -n "$(git status --porcelain)" ]; then
+          git commit -m "Update daily report $(date +'%Y-%m-%d')"
+          git push
+        else
+          echo "No changes to commit"
+        fi
