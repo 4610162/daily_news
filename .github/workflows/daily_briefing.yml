@@ -3,7 +3,7 @@ name: Daily Economic Briefing
 on:
   schedule:
     # 매일 한국 시간 오전 8시 (UTC 23시)에 실행
-    - cron: '0 23 * * *'
+    - cron: '0 22 * * *'
   workflow_dispatch: # 수동으로 실행하고 싶을 때 사용
 
 jobs:
@@ -30,4 +30,5 @@ jobs:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
         CHAT_ID: ${{ secrets.CHAT_ID }}
+        GH_TOKEN: ${{ secrets.GH_TOKEN }}
       run: python main.py
