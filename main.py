@@ -43,41 +43,51 @@ def get_news_content():
 # 2. Gemini AI 요약 함수 (이전과 동일)
 # main.py의 get_gemini_summary 함수를 이렇게 수정해 보세요
 
+import google.generativeai as genai
+
 def get_gemini_summary(news_data):
     if not GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY가 설정되지 않았습니다.")
         
-    # API 키 설정
     genai.configure(api_key=GEMINI_API_KEY)
     
-    # 모델명 앞에 'models/'를 명시하거나 최신 식별자 사용
-    # gemini-1.5-flash-latest 혹은 gemini-1.5-flash를 시도합니다.
-    try:
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
-        
-        prompt = f"""
-        너는 금융 및 증권 전문 애널리스트야. 제공된 한국경제 뉴스 목록을 읽고, 
-        투자자가 오늘 아침 반드시 체크해야 할 '핵심 브리핑'을 작성해줘.
-        
-        [지침]
-        1. 시장 전체의 흐름을 관통하는 가장 중요한 이슈 3개를 선정할 것.
-        2. 각 이슈별로 투자자가 주의해야 할 점이나 기회 요인을 분석할 것.
-        3. 텔레그램 가독성을 위해 적절한 이모지와 불렛포인트를 사용할 것.
+    # 모델 우선순위 설정: 1순위 Gemini(고성능/20회), 2순위 Gemma(무제한급)
+    model_priority = ['gemini-2.5-flash', 'gemma-3-27b']
+    
+    prompt = f"""
+    너는 금융 및 증권 전문 애널리스트야. 제공된 한국경제 뉴스 목록을 읽고, 
+    투자자가 오늘 아침 반드시 체크해야 할 '핵심 브리핑'을 작성해줘.
+    
+    [지침]
+    1. 시장 전체의 흐름을 관통하는 가장 중요한 이슈 3개를 선정할 것.
+    2. 각 이슈별로 투자자가 주의해야 할 점이나 기회 요인을 분석할 것.
+    3. 텔레그램 가독성을 위해 적절한 이모지와 불렛포인트를 사용할 것.
 
-        [뉴스 데이터]
-        {news_data}
-        """
-        
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        # 혹시 모델명이 문제라면 다른 이름으로 한 번 더 시도 (안전 장치)
-        if "404" in str(e):
-            model = genai.GenerativeModel('gemini-pro') # 기본 모델로 우회
+    [뉴스 데이터]
+    {news_data}
+    """
+
+    for model_name in model_priority:
+        try:
+            # 모델 인스턴스 생성 및 호출
+            model = genai.GenerativeModel(model_name)
             response = model.generate_content(prompt)
+            
+            # 성공 시 결과 반환 후 종료
             return response.text
-        else:
-            raise e
+            
+        except Exception as e:
+            error_msg = str(e)
+            
+            # 429(할당량 초과) 혹은 404(모델 없음)일 경우 다음 모델로 시도
+            if "429" in error_msg or "404" in error_msg:
+                print(f"⚠️ {model_name} 실패: 할당량 초과 혹은 모델 없음. 다음 모델로 전환합니다...")
+                continue
+            else:
+                # 그 외의 심각한 에러(네트워크 등)는 즉시 중단
+                return f"❌ API 호출 중 예외 발생: {e}"
+
+    return "❌ 모든 가용 모델의 호출에 실패했습니다."
 
 # 3. 텔레그램 전송 함수 (이전과 동일)
 async def send_telegram(message):
