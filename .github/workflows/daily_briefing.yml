@@ -53,12 +53,14 @@ jobs:
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         
-        # 원본 마크다운 파일을 master 브랜치에도 백업합니다.
-        # pull --rebase로 충돌을 방지합니다.
-        git pull --rebase origin master
-        
+        # 1. 먼저 변경된 파일들을 스테이징 영역에 올립니다 (매우 중요)
         git add docs/
         
+        # 2. 그 상태에서 서버의 최신 내용을 가져와 내 작업물 아래에 합칩니다.
+        # -X theirs 옵션을 주면 혹시 모를 충돌 시 내(Action) 결과물을 우선합니다.
+        git pull --rebase -X theirs origin master
+        
+        # 3. 커밋할 내용이 있는지 확인 후 푸시
         if [ -n "$(git status --porcelain)" ]; then
           git commit -m "Update daily report source $(date +'%Y-%m-%d')"
           git push origin master
