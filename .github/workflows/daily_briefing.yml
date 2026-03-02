@@ -67,11 +67,14 @@ jobs:
 # 마지막에 배포를 진행합니다.
     - name: Build and Deploy Zensical
       run: |
-        # 1. zensical이 설치된 경로를 GitHub 환경 변수(PATH)에 강제로 등록합니다.
-        echo "$(python -m site --user-base)/bin" >> $GITHUB_PATH
+        # 1. zensical이 설치된 정확한 위치를 파이썬에게 물어봅니다.
+        BIN_PATH=$(python -c "import site; print(site.getuserbase())")/bin/zensical
         
-        # 2. 변경된 PATH가 바로 적용되도록 쉘을 업데이트하는 효과를 줍니다.
-        export PATH="$PATH:$(python -m site --user-base)/bin"
-        
-        # 3. 이제 zensical을 실행합니다.
-        zensical deploy --force
+        # 2. 그 위치에 파일이 있는지 확인하고 있으면 바로 실행합니다.
+        if [ -f "$BIN_PATH" ]; then
+          $BIN_PATH deploy --force
+        else
+          # 혹시 위 경로가 아니면 시스템 전역 경로에서 시도합니다.
+          python3 -m pip install zensical  # 다시 한번 확실히 설치 확인
+          zensical deploy --force || /home/runner/.local/bin/zensical deploy --force
+        fi
