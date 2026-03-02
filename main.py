@@ -123,7 +123,7 @@ def get_telegram_brief(news_data):
     
     prompt = f"""
     다음 뉴스 데이터를 바탕으로 오늘 가장 중요한 경제 소식 3가지를 요약해줘.
-    - 각 소식은 한 줄로 작성할 것.
+    - 각 소식을 넘버링해서 한 줄로 작성할 것.
     - 이모지를 적절히 섞어서 친근하게 작성할 것.
     - 전체 리포트를 읽고 싶게 만드는 핵심 내용 위주로 작성할 것.
     - 한국어로 작성할 것.
@@ -168,7 +168,7 @@ def update_zensical_nav(report_date):
         print(f"✅ zensical.toml nav 업데이트 완료: {report_date}")
     else:
         print("ℹ️ 이미 등록된 리포트이거나 nav 구조를 찾을 수 없습니다.")
-        
+
 # 텔레그램 전송 부분 수정
 async def send_telegram_summary(summary_text, site_url):
     bot = Bot(token=TELEGRAM_TOKEN)
