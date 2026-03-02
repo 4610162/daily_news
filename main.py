@@ -136,38 +136,48 @@ def get_telegram_brief(news_data):
     return response.text.strip()
 
 def update_zensical_nav(report_date):
-    """zensical.toml의 nav 섹션에 새로운 리포트를 자동으로 추가합니다."""
+    """
+    zensical.toml의 nav 섹션에 새로운 리포트를 최신순으로 추가합니다.
+    """
     toml_path = "zensical.toml"
     
     if not os.path.exists(toml_path):
         print(f"⚠️ {toml_path} 파일을 찾을 수 없습니다.")
         return
 
-    # TOML 파일 읽기
-    with open(toml_path, "r", encoding="utf-8") as f:
-        config = toml.load(f)
+    try:
+        # 1. TOML 파일 로드
+        with open(toml_path, "r", encoding="utf-8") as f:
+            config = toml.load(f)
 
-    # 새로운 항목 생성 (예: {"2026-03-02": "reports/2026-03-02.md"})
-    new_entry = {report_date: f"reports/{report_date}.md"}
-    
-    # nav 구조에서 'Daily Reports' 찾아서 업데이트
-    nav_updated = False
-    for item in config.get('nav', []):
-        if "Daily Reports" in item:
-            reports_list = item["Daily Reports"]
-            # 중복 확인 후 맨 앞에 추가 (최신순)
-            if new_entry not in reports_list:
-                reports_list.insert(0, new_entry)
-                nav_updated = True
-            break
-            
-    if nav_updated:
-        # 수정된 내용을 TOML 파일로 다시 저장
-        with open(toml_path, "w", encoding="utf-8") as f:
-            toml.dump(config, f)
-        print(f"✅ zensical.toml nav 업데이트 완료: {report_date}")
-    else:
-        print("ℹ️ 이미 등록된 리포트이거나 nav 구조를 찾을 수 없습니다.")
+        # 2. 새로운 항목 생성 (예: {"2026-03-03": "reports/2026-03-03.md"})
+        new_entry = {report_date: f"reports/{report_date}.md"}
+        
+        nav_updated = False
+        
+        # 3. nav 리스트 내부에서 'Daily Reports' 키를 가진 딕셔너리 탐색
+        if 'nav' in config and isinstance(config['nav'], list):
+            for item in config['nav']:
+                if isinstance(item, dict) and "Daily Reports" in item:
+                    reports_list = item["Daily Reports"]
+                    
+                    # 중복 확인: 이미 해당 날짜 항목이 있는지 체크
+                    if not any(report_date in r for r in reports_list):
+                        # 최신 리포트가 맨 위로 오도록 0번 인덱스에 삽입
+                        reports_list.insert(0, new_entry)
+                        nav_updated = True
+                    break
+        
+        # 4. 변경사항이 있을 때만 파일 저장
+        if nav_updated:
+            with open(toml_path, "w", encoding="utf-8") as f:
+                toml.dump(config, f)
+            print(f"✅ zensical.toml 업데이트 완료: {report_date}")
+        else:
+            print(f"ℹ️ {report_date} 항목이 이미 존재하거나 구조를 찾을 수 없어 업데이트를 건너뜁니다.")
+
+    except Exception as e:
+        print(f"❌ zensical.toml 수정 중 오류 발생: {e}")
 
 # 텔레그램 전송 부분 수정
 async def send_telegram_summary(summary_text, site_url):
@@ -211,38 +221,38 @@ async def main():
         news_items, news_text_for_ai = get_news_content()
         indicators_raw = get_indicators_data()   # 추가
         indicators_md = format_to_markdown(indicators_raw)  # 추가
-
         full_analysis = get_gemini_summary(news_text_for_ai)
         telegram_brief = get_telegram_brief(news_text_for_ai)
 
         # 2. 날짜 및 제목 설정
-        today_str = datetime.now().strftime("%Y-%m-%d")
+        
         # report_title = f"📑 데일리 경제 브리핑 ({today_str})"
 
         # 4. 리포트 생성 (Markdown 저장)
+        today_str = datetime.now().strftime("%Y-%m-%d") # 날짜 변수 확보
         site_url = await create_and_save_report(news_items, indicators_md, full_analysis)
         
-        # # 3. 마크다운 본문(report_body) 내용 구성 (내용 구성 누락 수정)
-        # report_body = f"# {report_title}\n\n"
-        # report_body += "## 📰 주요 뉴스 헤드라인 (TOP 10)\n"
-        # for i, item in enumerate(news_items, 1):
-        #     report_body += f"{i}. [{item['cat']}] [{item['title']}]({item['link']})\n"
-        
-        # report_body += "\n---\n\n"
-        # report_body += "## 🤖 AI 분석 및 시장 전망\n"
-        # report_body += full_analysis
+        # 4.5 내비게이션 업데이트 (목록에 오늘 리포트 추가)
+        update_zensical_nav(today_str)
 
-        # 4. GitHub Issues에 아카이빙 (웹페이지 역할)
-        # issue_url = post_to_github_issues(report_title, report_body)
+        print("🌐 Zensical 웹사이트 배포 중...")
+        # 파이썬 내부 라이브러리를 통해 cli 기능을 직접 호출 (가장 에러 없는 방식)
+        deploy_command = "python -c \"import sys; from zensical.cli import cli; sys.argv=['zensical', 'deploy', '--force']; cli(obj={})\""
+        exit_code = os.system(deploy_command)
 
-        # 5. 텔레그램 전송 (함수 내부에서 전송 로직 수행)
-        # 만약 웹사이트가 아직 준비 안됐다면 issue_url을 사용하세요.
-        # final_url = site_url if site_url else issue_url
+        if exit_code == 0:
+            print("✅ 웹사이트 배포 성공!")
+        else:
+            print("⚠️ 배포 중 문제가 발생했지만, 일단 진행합니다.")
 
+        print("📱 텔레그램 메시지 구성 중...")
         bot = Bot(token=TELEGRAM_TOKEN)
+
+        safe_brief = telegram_brief.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        # HTML 모드에 최적화된 메시지 구성
         final_message = (
-            f"🚀 *오늘의 경제 브리핑 ({today_str})*\n\n"
-            f"{telegram_brief}\n\n"
+            f"🚀 <b>오늘의 경제 브리핑 ({today_str})</b>\n\n"
+            f"{safe_brief}\n\n"
             f"🔗 <a href='{site_url}'>상세 분석 보고서 보기</a>"
         )
         

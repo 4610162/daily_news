@@ -64,12 +64,13 @@ jobs:
           echo "No changes to commit"
         fi
         
-# 마지막에 배포를 진행합니다.
+# 마지막에 배포를 진행합니다. 
     - name: Build and Deploy Zensical
       run: |
-        # 1. pip로 설치된 바이너리 경로를 PATH에 강제로 추가합니다.
-        export PATH="$PATH:/home/runner/.local/bin"
+        # 1. 파이썬에게 zensical이 설치된 폴더 주소를 물어봅니다.
+        PACKAGE_PATH=$(python -c "import zensical; import os; print(os.path.dirname(zensical.__file__))")
         
-        # 2. zensical 설치 확인 및 배포
-        pip install zensical
-        zensical deploy --force
+        # 2. 그 폴더 근처에 있는 실행 파일을 강제로 실행합니다.
+        # 보통 패키지 폴더와 같은 레벨 혹은 그 상위에 바이너리가 있습니다.
+        # 가장 확실한 방법: 파이썬 내부 라이브러리를 통해 실행 명령 호출
+        python -c "import sys; from zensical.cli import cli; sys.argv=['zensical', 'deploy', '--force']; cli(obj={})"
