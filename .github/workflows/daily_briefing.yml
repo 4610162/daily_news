@@ -66,4 +66,4 @@ jobs:
 # 마지막에 배포를 진행합니다.
     - name: Build and Deploy Zensical
       run: |
-        zensical deploy --force
+        python -m zensical deploy --force
