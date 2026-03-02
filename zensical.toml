@@ -1,21 +1,19 @@
 site_name = "Daily AI 경제 리포트"
-
-[theme]
-name = "material"
-language = "ko"
-
-[theme.palette]
-primary = "indigo"
-accent = "indigo"
-
-[[theme.features]]
-"navigation.tabs" = true
-"search.highlight" = true
-
 [[nav]]
 Home = "index.md"
 
 [[nav]]
-"Daily Reports" = [
-    # 여기에 main.py가 자동으로 리포트들을 추가하게 됩니다.
-]
+
+[[nav."Daily Reports"]]
+2026-03-02 = "reports/2026-03-02.md"
+
+[theme]
+name = "material"
+language = "ko"
+[[theme.features]]
+"navigation.tabs" = true
+"search.highlight" = true
+
+[theme.palette]
+primary = "indigo"
+accent = "indigo"
