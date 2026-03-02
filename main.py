@@ -219,6 +219,7 @@ async def main():
         today_str = datetime.now().strftime("%Y-%m-%d")
         # report_title = f"📑 데일리 경제 브리핑 ({today_str})"
 
+        # 4. 리포트 생성 (Markdown 저장)
         site_url = await create_and_save_report(news_items, indicators_md, full_analysis)
         
         # # 3. 마크다운 본문(report_body) 내용 구성 (내용 구성 누락 수정)

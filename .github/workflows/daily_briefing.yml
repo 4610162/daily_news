@@ -67,6 +67,14 @@ jobs:
 # 마지막에 배포를 진행합니다.
     - name: Build and Deploy Zensical
       run: |
-        # 1. 파이썬에게 zensical 패키지가 어디 있는지 직접 실행하라고 시킵니다.
-        # -c 옵션으로 파이썬 내부에서 zensical의 메인 로직을 바로 호출합니다.
-        python -c "from zensical.cli import cli; cli(obj={});" deploy --force
+        # 1. zensical 실행 파일의 위치를 강제로 찾아냅니다.
+        Z_PATH=$(which zensical || find /home/runner/.local/bin -name zensical || find /opt/hostedtoolcache -name zensical | head -n 1)
+        
+        # 2. 찾은 경로로 실행합니다.
+        if [ -n "$Z_PATH" ]; then
+          echo "Found zensical at: $Z_PATH"
+          $Z_PATH deploy --force
+        else
+          echo "zensical not found, trying python module way"
+          python3 -m zensical deploy --force
+        fi
