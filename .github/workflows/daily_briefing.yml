@@ -47,15 +47,15 @@ jobs:
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         
-        # 1. 생성된 리포트(docs/)와 업데이트된 mkdocs.yml을 스테이징합니다.
-        # zensical.toml 대신 mkdocs.yml을 추가해야 합니다.
-        git add docs/ mkdocs.yml
+        # 1. 모든 변경사항(새 리포트, 수정된 mkdocs.yml 등)을 하나도 빠짐없이 스테이징합니다.
+        git add .
         
-        # 2. 커밋할 변경사항이 있는지 확인합니다.
+        # 2. 커밋할 내용이 있는지 확인 후 커밋
         if [ -n "$(git status --porcelain)" ]; then
           git commit -m "Update daily report and mkdocs nav $(date +'%Y-%m-%d')"
           
-          # 3. 최신 내용 반영 (Rebase)
+          # 3. 중요: pull rebase 전에 다시 한번 상태를 체크하거나 강제로 병합합니다.
+          # -X theirs는 충돌 시 서버(Action이 만든 것)의 내용을 우선시합니다.
           git pull origin master --rebase -X theirs
           
           # 4. 푸시
