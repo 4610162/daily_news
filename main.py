@@ -6,6 +6,9 @@ from telegram import Bot
 from datetime import datetime
 from dotenv import load_dotenv
 from github import Github
+# 새로운 지표 모듈 임포트
+from indicators import get_indicators_data, format_to_markdown
+import toml
 
 load_dotenv()
 
@@ -83,7 +86,7 @@ def get_gemini_summary(news_data):
 
     return "❌ 모든 가용 모델의 호출에 실패했습니다."
 
-async def create_and_save_report(news_items, analysis, issue_url=None):
+async def create_and_save_report(news_items, indicators_md, analysis):
     today_str = datetime.now().strftime("%Y-%m-%d")
     # 폴더 구조를 docs/reports/2026-02-28.md 형태로 생성
     os.makedirs("docs/reports", exist_ok=True)
@@ -96,6 +99,9 @@ async def create_and_save_report(news_items, analysis, issue_url=None):
         md_content += f"{i}. [{item['cat']}] [{item['title']}]({item['link']})\n"
     
     md_content += "\n---\n\n"
+    md_content += f"{indicators_md}\n"
+
+    md_content += "\n---\n\n"
     md_content += "## 🤖 AI 분석 및 시장 전망\n"
     md_content += analysis
     
@@ -105,7 +111,7 @@ async def create_and_save_report(news_items, analysis, issue_url=None):
     
     # 웹사이트 URL 반환 (사용자 계정/레포 이름에 맞춰 설정)
     site_url = f"https://4610162.github.io/daily_news/reports/{today_str}"
-    return site_url, md_content # 본문도 함께 반환하여 main에서 활용
+    return site_url
 
 # 텔레그램 상단에 노출할 3줄 핵심 요약 생성
 def get_telegram_brief(news_data):
@@ -129,6 +135,40 @@ def get_telegram_brief(news_data):
     response = model.generate_content(prompt)
     return response.text.strip()
 
+def update_zensical_nav(report_date):
+    """zensical.toml의 nav 섹션에 새로운 리포트를 자동으로 추가합니다."""
+    toml_path = "zensical.toml"
+    
+    if not os.path.exists(toml_path):
+        print(f"⚠️ {toml_path} 파일을 찾을 수 없습니다.")
+        return
+
+    # TOML 파일 읽기
+    with open(toml_path, "r", encoding="utf-8") as f:
+        config = toml.load(f)
+
+    # 새로운 항목 생성 (예: {"2026-03-02": "reports/2026-03-02.md"})
+    new_entry = {report_date: f"reports/{report_date}.md"}
+    
+    # nav 구조에서 'Daily Reports' 찾아서 업데이트
+    nav_updated = False
+    for item in config.get('nav', []):
+        if "Daily Reports" in item:
+            reports_list = item["Daily Reports"]
+            # 중복 확인 후 맨 앞에 추가 (최신순)
+            if new_entry not in reports_list:
+                reports_list.insert(0, new_entry)
+                nav_updated = True
+            break
+            
+    if nav_updated:
+        # 수정된 내용을 TOML 파일로 다시 저장
+        with open(toml_path, "w", encoding="utf-8") as f:
+            toml.dump(config, f)
+        print(f"✅ zensical.toml nav 업데이트 완료: {report_date}")
+    else:
+        print("ℹ️ 이미 등록된 리포트이거나 nav 구조를 찾을 수 없습니다.")
+        
 # 텔레그램 전송 부분 수정
 async def send_telegram_summary(summary_text, site_url):
     bot = Bot(token=TELEGRAM_TOKEN)
@@ -166,39 +206,43 @@ async def send_telegram_summary(summary_text, site_url):
 
 async def main():
     try:
-        # 1. 데이터 가져오기
+        print("🚀 데이터 수집 시작...")
+        # 1. 데이터 수집 (뉴스 + 경제 지표)
         news_items, news_text_for_ai = get_news_content()
+        indicators_raw = get_indicators_data()   # 추가
+        indicators_md = format_to_markdown(indicators_raw)  # 추가
+
         full_analysis = get_gemini_summary(news_text_for_ai)
         telegram_brief = get_telegram_brief(news_text_for_ai)
 
         # 2. 날짜 및 제목 설정
         today_str = datetime.now().strftime("%Y-%m-%d")
-        report_title = f"📑 데일리 경제 브리핑 ({today_str})"
+        # report_title = f"📑 데일리 경제 브리핑 ({today_str})"
 
-        site_url, report_body = await create_and_save_report(news_items, full_analysis)
+        site_url = await create_and_save_report(news_items, indicators_md, full_analysis)
         
-        # 3. 마크다운 본문(report_body) 내용 구성 (내용 구성 누락 수정)
-        report_body = f"# {report_title}\n\n"
-        report_body += "## 📰 주요 뉴스 헤드라인 (TOP 10)\n"
-        for i, item in enumerate(news_items, 1):
-            report_body += f"{i}. [{item['cat']}] [{item['title']}]({item['link']})\n"
+        # # 3. 마크다운 본문(report_body) 내용 구성 (내용 구성 누락 수정)
+        # report_body = f"# {report_title}\n\n"
+        # report_body += "## 📰 주요 뉴스 헤드라인 (TOP 10)\n"
+        # for i, item in enumerate(news_items, 1):
+        #     report_body += f"{i}. [{item['cat']}] [{item['title']}]({item['link']})\n"
         
-        report_body += "\n---\n\n"
-        report_body += "## 🤖 AI 분석 및 시장 전망\n"
-        report_body += full_analysis
+        # report_body += "\n---\n\n"
+        # report_body += "## 🤖 AI 분석 및 시장 전망\n"
+        # report_body += full_analysis
 
         # 4. GitHub Issues에 아카이빙 (웹페이지 역할)
         # issue_url = post_to_github_issues(report_title, report_body)
 
         # 5. 텔레그램 전송 (함수 내부에서 전송 로직 수행)
         # 만약 웹사이트가 아직 준비 안됐다면 issue_url을 사용하세요.
-        final_url = site_url if site_url else issue_url
+        # final_url = site_url if site_url else issue_url
 
         bot = Bot(token=TELEGRAM_TOKEN)
         final_message = (
             f"🚀 *오늘의 경제 브리핑 ({today_str})*\n\n"
             f"{telegram_brief}\n\n"
-            f"🔗 *상세 분석 보고서 보기:*\n{final_url}"
+            f"🔗 <a href='{site_url}'>상세 분석 보고서 보기</a>"
         )
         
         await bot.send_message(chat_id=CHAT_ID, text=final_message, parse_mode='HTML')

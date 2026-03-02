@@ -10,6 +10,6 @@ theme:
     - search.highlight # 검색 결과 하이라이트
 
 nav:
-  - Home: index.md
+  - Home: docs/index.md
   - Daily Reports: 
-      - reports/  # reports 폴더 내의 md 파일들을 자동으로 나열하게 설정 가능
+      - "2026-02-28 리포트": reports/ # reports 폴더 내의 md 파일들을 자동으로 나열하게 설정 가능

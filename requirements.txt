@@ -3,3 +3,7 @@ feedparser
 python-telegram-bot
 python-dotenv
 PyGithub
+fredapi
+yfinance
+pandas
+zensical
