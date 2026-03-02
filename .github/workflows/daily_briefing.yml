@@ -67,14 +67,9 @@ jobs:
 # 마지막에 배포를 진행합니다.
     - name: Build and Deploy Zensical
       run: |
-        # 1. zensical 실행 파일의 위치를 강제로 찾아냅니다.
-        Z_PATH=$(which zensical || find /home/runner/.local/bin -name zensical || find /opt/hostedtoolcache -name zensical | head -n 1)
+        # 1. pip로 설치된 바이너리 경로를 PATH에 강제로 추가합니다.
+        export PATH="$PATH:/home/runner/.local/bin"
         
-        # 2. 찾은 경로로 실행합니다.
-        if [ -n "$Z_PATH" ]; then
-          echo "Found zensical at: $Z_PATH"
-          $Z_PATH deploy --force
-        else
-          echo "zensical not found, trying python module way"
-          python3 -m zensical deploy --force
-        fi
+        # 2. zensical 설치 확인 및 배포
+        pip install zensical
+        zensical deploy --force
