@@ -7,3 +7,4 @@ fredapi
 yfinance
 pandas
 zensical
+toml
