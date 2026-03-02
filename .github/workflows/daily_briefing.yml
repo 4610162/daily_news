@@ -67,14 +67,6 @@ jobs:
 # 마지막에 배포를 진행합니다.
     - name: Build and Deploy Zensical
       run: |
-        # 1. zensical이 설치된 정확한 위치를 파이썬에게 물어봅니다.
-        BIN_PATH=$(python -c "import site; print(site.getuserbase())")/bin/zensical
-        
-        # 2. 그 위치에 파일이 있는지 확인하고 있으면 바로 실행합니다.
-        if [ -f "$BIN_PATH" ]; then
-          $BIN_PATH deploy --force
-        else
-          # 혹시 위 경로가 아니면 시스템 전역 경로에서 시도합니다.
-          python3 -m pip install zensical  # 다시 한번 확실히 설치 확인
-          zensical deploy --force || /home/runner/.local/bin/zensical deploy --force
-        fi
+        # 1. 파이썬에게 zensical 패키지가 어디 있는지 직접 실행하라고 시킵니다.
+        # -c 옵션으로 파이썬 내부에서 zensical의 메인 로직을 바로 호출합니다.
+        python -c "from zensical.cli import cli; cli(obj={});" deploy --force
