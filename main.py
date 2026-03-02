@@ -9,6 +9,7 @@ from github import Github
 # 새로운 지표 모듈 임포트
 from indicators import get_indicators_data, format_to_markdown
 import toml
+import yaml
 
 load_dotenv()
 
@@ -135,49 +136,38 @@ def get_telegram_brief(news_data):
     response = model.generate_content(prompt)
     return response.text.strip()
 
-def update_zensical_nav(report_date):
-    """
-    zensical.toml의 nav 섹션에 새로운 리포트를 최신순으로 추가합니다.
-    """
-    toml_path = "zensical.toml"
-    
-    if not os.path.exists(toml_path):
-        print(f"⚠️ {toml_path} 파일을 찾을 수 없습니다.")
+def update_mkdocs_nav(report_date):
+    """MkDocs용 mkdocs.yml 내비게이션 업데이트"""
+    yaml_path = "mkdocs.yml"
+    if not os.path.exists(yaml_path):
+        print(f"⚠️ {yaml_path} 파일이 없습니다.")
         return
 
     try:
-        # 1. TOML 파일 로드
-        with open(toml_path, "r", encoding="utf-8") as f:
-            config = toml.load(f)
+        with open(yaml_path, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
 
-        # 2. 새로운 항목 생성 (예: {"2026-03-03": "reports/2026-03-03.md"})
         new_entry = {report_date: f"reports/{report_date}.md"}
-        
         nav_updated = False
         
-        # 3. nav 리스트 내부에서 'Daily Reports' 키를 가진 딕셔너리 탐색
-        if 'nav' in config and isinstance(config['nav'], list):
+        # nav 리스트에서 'Daily Reports' 섹션 찾기
+        if 'nav' in config:
             for item in config['nav']:
                 if isinstance(item, dict) and "Daily Reports" in item:
                     reports_list = item["Daily Reports"]
-                    
-                    # 중복 확인: 이미 해당 날짜 항목이 있는지 체크
+                    # 중복 체크 후 최신순 삽입
                     if not any(report_date in r for r in reports_list):
-                        # 최신 리포트가 맨 위로 오도록 0번 인덱스에 삽입
                         reports_list.insert(0, new_entry)
                         nav_updated = True
                     break
         
-        # 4. 변경사항이 있을 때만 파일 저장
         if nav_updated:
-            with open(toml_path, "w", encoding="utf-8") as f:
-                toml.dump(config, f)
-            print(f"✅ zensical.toml 업데이트 완료: {report_date}")
-        else:
-            print(f"ℹ️ {report_date} 항목이 이미 존재하거나 구조를 찾을 수 없어 업데이트를 건너뜁니다.")
-
+            with open(yaml_path, "w", encoding="utf-8") as f:
+                # allow_unicode=True를 해야 한글이 깨지지 않습니다.
+                yaml.dump(config, f, allow_unicode=True, sort_keys=False)
+            print(f"✅ mkdocs.yml 내비게이션 업데이트 완료")
     except Exception as e:
-        print(f"❌ zensical.toml 수정 중 오류 발생: {e}")
+        print(f"❌ YAML 수정 실패: {e}")
 
 # 텔레그램 전송 부분 수정
 async def send_telegram_summary(summary_text, site_url):
@@ -216,41 +206,33 @@ async def send_telegram_summary(summary_text, site_url):
 
 async def main():
     try:
-        print("🚀 데이터 수집 시작...")
-        # 1. 데이터 수집 (뉴스 + 경제 지표)
+        print("🚀 데이터 수집 및 분석 시작...")
         news_items, news_text_for_ai = get_news_content()
-        indicators_raw = get_indicators_data()   # 추가
-        indicators_md = format_to_markdown(indicators_raw)  # 추가
+        indicators_raw = get_indicators_data()
+        indicators_md = format_to_markdown(indicators_raw)
         full_analysis = get_gemini_summary(news_text_for_ai)
         telegram_brief = get_telegram_brief(news_text_for_ai)
 
-        # 2. 날짜 및 제목 설정
-        
-        # report_title = f"📑 데일리 경제 브리핑 ({today_str})"
-
-        # 4. 리포트 생성 (Markdown 저장)
-        today_str = datetime.now().strftime("%Y-%m-%d") # 날짜 변수 확보
+        today_str = datetime.now().strftime("%Y-%m-%d")
         site_url = await create_and_save_report(news_items, indicators_md, full_analysis)
         
-        # 4.5 내비게이션 업데이트 (목록에 오늘 리포트 추가)
-        update_zensical_nav(today_str)
+        # 1. 내비게이션 업데이트
+        update_mkdocs_nav(today_str)
 
-        print("🌐 Zensical 웹사이트 배포 중...")
-        import os
-        # 'zensical' 명령어 대신 'python -m zensical'을 사용합니다.
-        # 이 방식은 파이썬이 패키지 내부의 __main__.py를 찾아 실행하므로 경로 영향을 덜 받습니다.
-        exit_code = os.system("python -m zensical deploy --force")
-
+        # 2. 웹사이트 배포
+        print("🌐 MkDocs 웹사이트 배포 중...")
+        exit_code = os.system("mkdocs gh-deploy --force")
+        
         if exit_code == 0:
             print("✅ 웹사이트 배포 성공!")
         else:
-            print("⚠️ 배포 실패. 로그를 확인하세요.")
+            print("⚠️ 배포 중 오류가 발생했지만 메시지 전송을 시도합니다.")
 
+        # 3. 텔레그램 메시지 구성 (들여쓰기 수정됨: 배포 결과와 상관없이 실행)
         print("📱 텔레그램 메시지 구성 중...")
         bot = Bot(token=TELEGRAM_TOKEN)
-
         safe_brief = telegram_brief.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        # HTML 모드에 최적화된 메시지 구성
+        
         final_message = (
             f"🚀 <b>오늘의 경제 브리핑 ({today_str})</b>\n\n"
             f"{safe_brief}\n\n"
@@ -258,10 +240,10 @@ async def main():
         )
         
         await bot.send_message(chat_id=CHAT_ID, text=final_message, parse_mode='HTML')
-        print("✅ 텔레그램 전송 완료!")
+        print("✅ 모든 작업 완료!")
 
     except Exception as e:
-        print(f"❌ 오류 발생: {e}")
+        print(f"❌ 실행 중 오류 발생: {e}")
 
 if __name__ == "__main__":
     asyncio.run(main())

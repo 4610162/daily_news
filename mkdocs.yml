@@ -1,0 +1,9 @@
+site_name: 데일리 경제 브리핑
+site_url: https://4610162.github.io/daily_news/
+
+theme:
+  name: material
+
+nav:
+  - Home: index.md
+  - Daily Reports: []

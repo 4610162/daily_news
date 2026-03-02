@@ -6,7 +6,7 @@ on:
     - cron: '0 22 * * *'
   workflow_dispatch:
 
-# 아래 권한 설정이 있어야 Zensical이 페이지를 배포할 수 있습니다.
+# MkDocs 배포를 위해 필수적인 권한 설정
 permissions:
   contents: write
   pages: write
@@ -20,7 +20,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
       with:
-        fetch-depth: 0 # 전체 히스토리를 가져와야 push 충돌이 적습니다.
+        fetch-depth: 0 
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -47,35 +47,26 @@ jobs:
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         
-        # 1. 변경된 파일(리포트 및 zensical.toml)을 먼저 스테이징합니다.
-        git add docs/ zensical.toml
+        # 1. 생성된 리포트(docs/)와 업데이트된 mkdocs.yml을 스테이징합니다.
+        # zensical.toml 대신 mkdocs.yml을 추가해야 합니다.
+        git add docs/ mkdocs.yml
         
         # 2. 커밋할 변경사항이 있는지 확인합니다.
         if [ -n "$(git status --porcelain)" ]; then
-          git commit -m "Update daily report and nav $(date +'%Y-%m-%d')"
+          git commit -m "Update daily report and mkdocs nav $(date +'%Y-%m-%d')"
           
-          # 3. 커밋 후에 원격 저장소의 최신 내용을 가져와 합칩니다.
-          # rebase 전략을 사용하며, 충돌 시 원격 내용을 우선하도록 설정하여 자동화 에러를 방지합니다.
+          # 3. 최신 내용 반영 (Rebase)
           git pull origin master --rebase -X theirs
           
-          # 4. 최종적으로 푸시합니다.
+          # 4. 푸시
           git push origin master
         else
           echo "No changes to commit"
         fi
-        
-# 마지막에 배포를 진행합니다. 
-    - name: Build and Deploy Zensical
+
+    # 마지막 배포 단계: MkDocs 전용 명령어로 변경
+    - name: Build and Deploy MkDocs
       run: |
-        # 1. 파이썬의 바이너리 설치 경로들을 PATH에 추가합니다.
-        export PATH=$PATH:$(python -m site --user-base)/bin
-        export PATH=$PATH:/opt/hostedtoolcache/Python/3.9.25/x64/bin
-        
-        # 2. 설치 확인 및 실행
-        if command -v zensical &> /dev/null; then
-            echo "✅ Zensical found at: $(command -v zensical)"
-            zensical deploy --force
-        else
-            echo "❌ Zensical still not found. Trying direct module run..."
-            python -m zensical deploy --force || echo "❌ All attempts failed." && exit 1
-        fi
+        # main.py 안에서도 배포를 하지만, 여기서 한 번 더 확실하게 해줍니다.
+        # mkdocs-material 등 테마가 정상 설치되었다면 바로 작동합니다.
+        mkdocs gh-deploy --force

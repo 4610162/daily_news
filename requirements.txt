@@ -6,5 +6,6 @@ PyGithub
 fredapi
 yfinance
 pandas
-zensical
 toml
+pyyaml
+mkdocs-material
