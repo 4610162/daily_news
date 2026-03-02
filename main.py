@@ -236,18 +236,15 @@ async def main():
         update_zensical_nav(today_str)
 
         print("🌐 Zensical 웹사이트 배포 중...")
-        import subprocess
-        
-        # 시스템에 설치된 zensical의 위치를 자동으로 찾아 실행합니다.
-        try:
-            # shell=True를 사용하여 시스템 경로상의 zensical을 실행
-            result = subprocess.run("zensical deploy --force", shell=True, capture_output=True, text=True)
-            if result.returncode == 0:
-                print("✅ 웹사이트 배포 성공!")
-            else:
-                print(f"⚠️ 배포 실패 로그: {result.stderr}")
-        except Exception as e:
-            print(f"❌ 배포 시도 중 에러: {e}")
+        import os
+        # 'zensical' 명령어 대신 'python -m zensical'을 사용합니다.
+        # 이 방식은 파이썬이 패키지 내부의 __main__.py를 찾아 실행하므로 경로 영향을 덜 받습니다.
+        exit_code = os.system("python -m zensical deploy --force")
+
+        if exit_code == 0:
+            print("✅ 웹사이트 배포 성공!")
+        else:
+            print("⚠️ 배포 실패. 로그를 확인하세요.")
 
         print("📱 텔레그램 메시지 구성 중...")
         bot = Bot(token=TELEGRAM_TOKEN)

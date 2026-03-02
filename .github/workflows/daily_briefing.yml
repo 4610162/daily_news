@@ -67,14 +67,15 @@ jobs:
 # 마지막에 배포를 진행합니다. 
     - name: Build and Deploy Zensical
       run: |
-        # 1. zensical 실행 파일이 어디에 설치되었는지 강제로 찾아냅니다.
-        ZENSICAL_BIN=$(python -m site --user-base)/bin/zensical
-        if [ ! -f "$ZENSICAL_BIN" ]; then
-            # 만약 사용자 폴더에 없다면 시스템 폴더에서 찾습니다.
-            ZENSICAL_BIN=$(which zensical || find /opt/hostedtoolcache -name zensical -type f -executable | head -n 1)
+        # 1. 파이썬의 바이너리 설치 경로들을 PATH에 추가합니다.
+        export PATH=$PATH:$(python -m site --user-base)/bin
+        export PATH=$PATH:/opt/hostedtoolcache/Python/3.9.25/x64/bin
+        
+        # 2. 설치 확인 및 실행
+        if command -v zensical &> /dev/null; then
+            echo "✅ Zensical found at: $(command -v zensical)"
+            zensical deploy --force
+        else
+            echo "❌ Zensical still not found. Trying direct module run..."
+            python -m zensical deploy --force || echo "❌ All attempts failed." && exit 1
         fi
-        
-        echo "Found Zensical at: $ZENSICAL_BIN"
-        
-        # 2. 찾은 경로를 사용하여 직접 실행합니다.
-        $ZENSICAL_BIN deploy --force
