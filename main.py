@@ -236,14 +236,18 @@ async def main():
         update_zensical_nav(today_str)
 
         print("🌐 Zensical 웹사이트 배포 중...")
-        # 파이썬 내부 라이브러리를 통해 cli 기능을 직접 호출 (가장 에러 없는 방식)
-        deploy_command = "python -c \"import sys; from zensical.cli import cli; sys.argv=['zensical', 'deploy', '--force']; cli(obj={})\""
-        exit_code = os.system(deploy_command)
-
-        if exit_code == 0:
-            print("✅ 웹사이트 배포 성공!")
-        else:
-            print("⚠️ 배포 중 문제가 발생했지만, 일단 진행합니다.")
+        import subprocess
+        
+        # 시스템에 설치된 zensical의 위치를 자동으로 찾아 실행합니다.
+        try:
+            # shell=True를 사용하여 시스템 경로상의 zensical을 실행
+            result = subprocess.run("zensical deploy --force", shell=True, capture_output=True, text=True)
+            if result.returncode == 0:
+                print("✅ 웹사이트 배포 성공!")
+            else:
+                print(f"⚠️ 배포 실패 로그: {result.stderr}")
+        except Exception as e:
+            print(f"❌ 배포 시도 중 에러: {e}")
 
         print("📱 텔레그램 메시지 구성 중...")
         bot = Bot(token=TELEGRAM_TOKEN)

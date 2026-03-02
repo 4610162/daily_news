@@ -67,10 +67,14 @@ jobs:
 # 마지막에 배포를 진행합니다. 
     - name: Build and Deploy Zensical
       run: |
-        # 1. 파이썬에게 zensical이 설치된 폴더 주소를 물어봅니다.
-        PACKAGE_PATH=$(python -c "import zensical; import os; print(os.path.dirname(zensical.__file__))")
+        # 1. zensical 실행 파일이 어디에 설치되었는지 강제로 찾아냅니다.
+        ZENSICAL_BIN=$(python -m site --user-base)/bin/zensical
+        if [ ! -f "$ZENSICAL_BIN" ]; then
+            # 만약 사용자 폴더에 없다면 시스템 폴더에서 찾습니다.
+            ZENSICAL_BIN=$(which zensical || find /opt/hostedtoolcache -name zensical -type f -executable | head -n 1)
+        fi
         
-        # 2. 그 폴더 근처에 있는 실행 파일을 강제로 실행합니다.
-        # 보통 패키지 폴더와 같은 레벨 혹은 그 상위에 바이너리가 있습니다.
-        # 가장 확실한 방법: 파이썬 내부 라이브러리를 통해 실행 명령 호출
-        python -c "import sys; from zensical.cli import cli; sys.argv=['zensical', 'deploy', '--force']; cli(obj={})"
+        echo "Found Zensical at: $ZENSICAL_BIN"
+        
+        # 2. 찾은 경로를 사용하여 직접 실행합니다.
+        $ZENSICAL_BIN deploy --force
