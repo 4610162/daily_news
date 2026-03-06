@@ -3,7 +3,7 @@ name: Daily Economic Briefing
 on:
   schedule:
     # 매일 한국 시간 오전 7시 (UTC 22시) 실행
-    - cron: '0 22 * * *'
+    - cron: '13 21 * * *'
   workflow_dispatch:
 
 # MkDocs 배포를 위해 필수적인 권한 설정
