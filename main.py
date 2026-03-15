@@ -1,9 +1,12 @@
 import os
+import json
 import feedparser
 import google.generativeai as genai
 import asyncio
 from telegram import Bot
 from datetime import datetime
+import urllib.parse
+import urllib.request
 from dotenv import load_dotenv
 from github import Github
 # 새로운 지표 모듈 임포트
@@ -17,6 +20,61 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
+UPSTASH_REDIS_REST_URL = os.getenv("UPSTASH_REDIS_REST_URL", "").rstrip("/")
+UPSTASH_REDIS_REST_TOKEN = os.getenv("UPSTASH_REDIS_REST_TOKEN", "")
+
+SUBSCRIBERS_KEY = "tg:subscribers"
+
+
+def redis_is_configured():
+    return bool(UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN)
+
+
+def redis_request(command, *args):
+    if not redis_is_configured():
+        return None
+
+    encoded_parts = [urllib.parse.quote(str(part), safe="") for part in (command, *args)]
+    url = f"{UPSTASH_REDIS_REST_URL}/{'/'.join(encoded_parts)}"
+    req = urllib.request.Request(
+        url,
+        headers={"Authorization": f"Bearer {UPSTASH_REDIS_REST_TOKEN}"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        print(f"❌ Redis 요청 실패 ({command}): {e}")
+        return None
+
+    if payload.get("error"):
+        print(f"❌ Redis 오류 ({command}): {payload['error']}")
+        return None
+
+    return payload.get("result")
+
+
+def get_subscriber_chat_ids():
+    subscribers = []
+
+    if CHAT_ID:
+        subscribers.append(str(CHAT_ID))
+
+    if redis_is_configured():
+        result = redis_request("SMEMBERS", SUBSCRIBERS_KEY)
+        if isinstance(result, list):
+            subscribers.extend(str(chat_id) for chat_id in result if str(chat_id).strip())
+
+    seen = set()
+    unique_subscribers = []
+    for chat_id in subscribers:
+        if chat_id not in seen:
+            seen.add(chat_id)
+            unique_subscribers.append(chat_id)
+
+    return unique_subscribers
 
 def get_news_content():
     urls = [
@@ -172,6 +230,7 @@ def update_mkdocs_nav(report_date):
 # 텔레그램 전송 부분 수정
 async def send_telegram_summary(summary_text, site_url):
     bot = Bot(token=TELEGRAM_TOKEN)
+    subscriber_chat_ids = get_subscriber_chat_ids()
     
     # 요약문 상단에 배치
     message = (
@@ -179,12 +238,13 @@ async def send_telegram_summary(summary_text, site_url):
         f"{summary_text}\n\n" # Gemini에게 3줄 요약을 별도로 요청해서 넣으면 베스트!
         f"🔗 <a href='{site_url}'>상세 분석 보고서 보기</a>"
     )
-    
-    await bot.send_message(
-        chat_id=CHAT_ID, 
-        text=message, 
-        parse_mode='HTML' # 링크가 깔끔하게 걸리도록 설정
-    )
+
+    for chat_id in subscriber_chat_ids:
+        await bot.send_message(
+            chat_id=chat_id,
+            text=message,
+            parse_mode='HTML'
+        )
 
 # def post_to_github_issues(title, content):
 #     gh_token = os.getenv("GH_TOKEN")
@@ -238,8 +298,20 @@ async def main():
             f"{safe_brief}\n\n"
             f"🔗 <a href='{site_url}'>상세 분석 보고서 보기</a>"
         )
-        
-        await bot.send_message(chat_id=CHAT_ID, text=final_message, parse_mode='HTML')
+
+        subscriber_chat_ids = get_subscriber_chat_ids()
+        if not subscriber_chat_ids:
+            raise ValueError("구독자 또는 CHAT_ID가 설정되지 않았습니다.")
+
+        sent_count = 0
+        for chat_id in subscriber_chat_ids:
+            try:
+                await bot.send_message(chat_id=chat_id, text=final_message, parse_mode='HTML')
+                sent_count += 1
+            except Exception as send_error:
+                print(f"⚠️ chat_id={chat_id} 전송 실패: {send_error}")
+
+        print(f"✅ 텔레그램 전송 완료: {sent_count}/{len(subscriber_chat_ids)}명")
         print("✅ 모든 작업 완료!")
 
     except Exception as e:

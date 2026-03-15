@@ -41,6 +41,7 @@ ADMIN_IDS = {
 
 APPROVED_USERS_KEY = "tg:approved_users"
 PENDING_USERS_KEY = "tg:pending_users"
+SUBSCRIBERS_KEY = "tg:subscribers"
 
 NOT_NEWS_MESSAGE = (
     "이 봇은 최신 뉴스 동향 분석만 제공합니다.\n\n"
@@ -54,6 +55,9 @@ NOT_NEWS_MESSAGE = (
 START_MESSAGE = (
     "안녕하세요! 뉴스 동향 분석 봇입니다.\n\n"
     "궁금한 뉴스 주제를 입력해주세요.\n\n"
+    "구독 명령어:\n"
+    "• /subscribe - 매일 아침 리포트 구독\n"
+    "• /unsubscribe - 매일 아침 리포트 구독 해제\n\n"
     "예시 질문:\n"
     "• AI 반도체 최신 뉴스\n"
     "• 미국 금리 최근 동향\n"
@@ -170,6 +174,16 @@ def _get_pending_users() -> list[str] | None:
     return [str(user_id) for user_id in result]
 
 
+def _subscribe_user(user_id: int) -> bool:
+    result = _redis_request("SADD", SUBSCRIBERS_KEY, user_id)
+    return result is not None
+
+
+def _unsubscribe_user(user_id: int) -> bool:
+    result = _redis_request("SREM", SUBSCRIBERS_KEY, user_id)
+    return result is not None
+
+
 def _notify_admins_new_request(user_id: int, username: str, first_name: str, text: str) -> None:
     display_name = first_name or "(이름 없음)"
     username_text = f"@{username}" if username else "(username 없음)"
@@ -242,7 +256,8 @@ def _handle_admin_command(text: str, chat_id: int, user_id: int) -> bool:
         _send_telegram_message(chat_id, f"{target_user_id} 사용자를 승인했습니다.")
         _send_telegram_message(
             target_user_id,
-            "관리자 승인이 완료되었습니다. 이제 뉴스 질의를 보낼 수 있습니다.",
+            "관리자 승인이 완료되었습니다. 이제 뉴스 질의를 보낼 수 있습니다.\n"
+            "매일 아침 리포트를 받고 싶다면 /subscribe 를 보내주세요.",
         )
         return True
 
@@ -255,6 +270,34 @@ def _handle_admin_command(text: str, chat_id: int, user_id: int) -> bool:
         target_user_id,
         "관리자 승인 대상에서 제외되었습니다. 필요하면 다시 문의해주세요.",
     )
+    return True
+
+
+def _handle_subscription_command(text: str, chat_id: int, user_id: int) -> bool:
+    if text not in {"/subscribe", "/unsubscribe"}:
+        return False
+
+    if not _redis_is_configured():
+        _send_telegram_message(chat_id, REDIS_NOT_CONFIGURED_MESSAGE)
+        return True
+
+    if not _is_approved_user(user_id):
+        _send_telegram_message(chat_id, "승인된 사용자만 구독할 수 있습니다.")
+        return True
+
+    if text == "/subscribe":
+        if not _subscribe_user(user_id):
+            _send_telegram_message(chat_id, "구독 처리 중 오류가 발생했습니다.")
+            return True
+
+        _send_telegram_message(chat_id, "매일 아침 뉴스 리포트 구독이 완료되었습니다.")
+        return True
+
+    if not _unsubscribe_user(user_id):
+        _send_telegram_message(chat_id, "구독 해제 처리 중 오류가 발생했습니다.")
+        return True
+
+    _send_telegram_message(chat_id, "매일 아침 뉴스 리포트 구독이 해제되었습니다.")
     return True
 
 
@@ -333,6 +376,10 @@ class handler(BaseHTTPRequestHandler):
                 return
 
             if _handle_admin_command(text, chat_id, user_id):
+                self._respond(200, {"ok": True})
+                return
+
+            if _handle_subscription_command(text, chat_id, user_id):
                 self._respond(200, {"ok": True})
                 return
 
