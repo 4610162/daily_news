@@ -55,9 +55,12 @@ NOT_NEWS_MESSAGE = (
 START_MESSAGE = (
     "안녕하세요! 뉴스 동향 분석 봇입니다.\n\n"
     "궁금한 뉴스 주제를 입력해주세요.\n\n"
+    "그룹 채팅에서는 /news <주제> 형태로 요청해주세요.\n\n"
     "구독 명령어:\n"
     "• /subscribe - 매일 아침 리포트 구독\n"
     "• /unsubscribe - 매일 아침 리포트 구독 해제\n\n"
+    "검색 명령어:\n"
+    "• /news AI 반도체 최신 뉴스\n\n"
     "예시 질문:\n"
     "• AI 반도체 최신 뉴스\n"
     "• 미국 금리 최근 동향\n"
@@ -212,11 +215,23 @@ def _parse_target_user_id(command_text: str) -> int | None:
         return None
 
 
+def _normalize_command(command: str) -> str:
+    """Telegram 그룹 명령(`/cmd@botname`)에서 bot suffix를 제거."""
+    return command.split("@", maxsplit=1)[0].lower()
+
+
+def _extract_command_and_args(text: str) -> tuple[str, str]:
+    parts = text.split(maxsplit=1)
+    command = _normalize_command(parts[0]) if parts else ""
+    args = parts[1].strip() if len(parts) > 1 else ""
+    return command, args
+
+
 def _handle_admin_command(text: str, chat_id: int, user_id: int) -> bool:
     if not text.startswith("/"):
         return False
 
-    command = text.split(maxsplit=1)[0].lower()
+    command, _ = _extract_command_and_args(text)
     if command not in {"/approve", "/reject", "/pending"}:
         return False
 
@@ -274,7 +289,8 @@ def _handle_admin_command(text: str, chat_id: int, user_id: int) -> bool:
 
 
 def _handle_subscription_command(text: str, chat_id: int, user_id: int) -> bool:
-    if text not in {"/subscribe", "/unsubscribe"}:
+    command, _ = _extract_command_and_args(text)
+    if command not in {"/subscribe", "/unsubscribe"}:
         return False
 
     if not _redis_is_configured():
@@ -285,7 +301,7 @@ def _handle_subscription_command(text: str, chat_id: int, user_id: int) -> bool:
         _send_telegram_message(chat_id, "승인된 사용자만 구독할 수 있습니다.")
         return True
 
-    if text == "/subscribe":
+    if command == "/subscribe":
         if not _subscribe_user(user_id):
             _send_telegram_message(chat_id, "구독 처리 중 오류가 발생했습니다.")
             return True
@@ -298,6 +314,29 @@ def _handle_subscription_command(text: str, chat_id: int, user_id: int) -> bool:
         return True
 
     _send_telegram_message(chat_id, "매일 아침 뉴스 리포트 구독이 해제되었습니다.")
+    return True
+
+
+def _handle_news_command(
+    text: str,
+    chat_id: int,
+    user_id: int,
+    username: str,
+    first_name: str,
+) -> bool:
+    command, args = _extract_command_and_args(text)
+    if command != "/news":
+        return False
+
+    if not _is_approved_user(user_id):
+        _handle_unapproved_user(chat_id, user_id, username, first_name, text)
+        return True
+
+    if not args:
+        _send_telegram_message(chat_id, "사용법: /news <검색할 주제>")
+        return True
+
+    _process_message(args, chat_id)
     return True
 
 
@@ -383,8 +422,13 @@ class handler(BaseHTTPRequestHandler):
                 self._respond(200, {"ok": True})
                 return
 
+            if _handle_news_command(text, chat_id, user_id, username, first_name):
+                self._respond(200, {"ok": True})
+                return
+
             # /start 명령어 처리
-            if text == "/start":
+            command, _ = _extract_command_and_args(text)
+            if command == "/start":
                 if _is_approved_user(user_id):
                     _send_telegram_message(chat_id, START_MESSAGE)
                 else:
