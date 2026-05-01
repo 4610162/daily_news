@@ -4,9 +4,10 @@ import feedparser
 import google.generativeai as genai
 import asyncio
 from telegram import Bot
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 from dotenv import load_dotenv
 from github import Github
 # 새로운 지표 모듈 임포트
@@ -24,6 +25,13 @@ UPSTASH_REDIS_REST_URL = os.getenv("UPSTASH_REDIS_REST_URL", "").rstrip("/")
 UPSTASH_REDIS_REST_TOKEN = os.getenv("UPSTASH_REDIS_REST_TOKEN", "")
 
 SUBSCRIBERS_KEY = "tg:subscribers"
+KST = timezone(timedelta(hours=9))
+RSS_REQUEST_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (compatible; DailyEconomicBriefing/1.0; "
+        "+https://github.com/4610162/daily_news)"
+    )
+}
 
 
 def redis_is_configured():
@@ -85,17 +93,57 @@ def get_news_content():
     news_text_for_ai = ""
     
     for url in urls:
-        feed = feedparser.parse(url)
+        feed = feedparser.parse(url, request_headers=RSS_REQUEST_HEADERS)
+        entries = feed.entries
+
+        if getattr(feed, "bozo", False):
+            print(f"⚠️ RSS 파싱 경고 ({url}): {getattr(feed, 'bozo_exception', '')}")
+
+        if not entries:
+            print(f"⚠️ feedparser 수집 0건 ({url}), XML fallback 시도")
+            entries = parse_rss_with_urllib(url)
+
+        print(f"📰 RSS 수집 결과 ({url}): {len(entries)}건")
         category = "경제" if "economy" in url else "증권"
-        for entry in feed.entries[:5]:
+        for entry in entries[:5]:
             title = entry.get('title', '제목 없음')
             link = entry.get('link', '#')
-            summary = entry.get('summary', entry.get('description', '내용 없음'))
+            summary = entry.get('summary', entry.get('description', title))
             
             news_items.append({"cat": category, "title": title, "link": link})
             news_text_for_ai += f"제목: {title}\n내용: {summary}\n\n"
-            
+
+    if not news_items:
+        raise RuntimeError("RSS에서 뉴스 항목을 1건도 수집하지 못했습니다.")
+
     return news_items, news_text_for_ai
+
+
+def parse_rss_with_urllib(url):
+    try:
+        req = urllib.request.Request(url, headers=RSS_REQUEST_HEADERS)
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            root = ET.fromstring(resp.read())
+    except Exception as e:
+        print(f"❌ RSS XML fallback 실패 ({url}): {e}")
+        return []
+
+    entries = []
+    channel = root.find("channel") or root
+    for item in channel.findall("item"):
+        title_el = item.find("title")
+        link_el = item.find("link")
+        desc_el = item.find("description")
+        title = (title_el.text or "").strip() if title_el is not None else "제목 없음"
+        entries.append(
+            {
+                "title": title,
+                "link": (link_el.text or "").strip() if link_el is not None else "#",
+                "summary": (desc_el.text or "").strip() if desc_el is not None else title,
+            }
+        )
+
+    return entries
 
 def get_gemini_summary(news_data):
     if not GEMINI_API_KEY:
@@ -104,7 +152,7 @@ def get_gemini_summary(news_data):
     genai.configure(api_key=GEMINI_API_KEY)
 
     # 💡 현재 날짜를 구해서 프롬프트에 넣어줍니다.
-    today_date = datetime.now().strftime("%Y년 %m월 %d일")
+    today_date = datetime.now(KST).strftime("%Y년 %m월 %d일")
     
     # 모델 우선순위 설정: 1순위 Gemini(고성능/20회), 2순위 Gemma(무제한급)
     model_priority = ['gemini-2.5-flash', 'models/gemma-3-27b-it']
@@ -146,7 +194,7 @@ def get_gemini_summary(news_data):
     return "❌ 모든 가용 모델의 호출에 실패했습니다."
 
 async def create_and_save_report(news_items, indicators_md, analysis):
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = datetime.now(KST).strftime("%Y-%m-%d")
     # 폴더 구조를 docs/reports/2026-02-28.md 형태로 생성
     os.makedirs("docs/reports", exist_ok=True)
     file_path = f"docs/reports/{today_str}.md"  # 변수명 통일
@@ -234,7 +282,7 @@ async def send_telegram_summary(summary_text, site_url):
     
     # 요약문 상단에 배치
     message = (
-        f"📅 <b>오늘의 경제 브리핑 ({datetime.now().strftime('%m/%d')})</b>\n\n"
+        f"📅 <b>오늘의 경제 브리핑 ({datetime.now(KST).strftime('%m/%d')})</b>\n\n"
         f"{summary_text}\n\n" # Gemini에게 3줄 요약을 별도로 요청해서 넣으면 베스트!
         f"🔗 <a href='{site_url}'>상세 분석 보고서 보기</a>"
     )
@@ -273,7 +321,7 @@ async def main():
         full_analysis = get_gemini_summary(news_text_for_ai)
         telegram_brief = get_telegram_brief(news_text_for_ai)
 
-        today_str = datetime.now().strftime("%Y-%m-%d")
+        today_str = datetime.now(KST).strftime("%Y-%m-%d")
         site_url = await create_and_save_report(news_items, indicators_md, full_analysis)
         
         # 1. 내비게이션 업데이트
