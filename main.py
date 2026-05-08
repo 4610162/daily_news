@@ -32,6 +32,13 @@ RSS_REQUEST_HEADERS = {
         "+https://github.com/4610162/daily_news)"
     )
 }
+GEMINI_MODEL_PRIORITY = (
+    "gemini-2.5-flash",
+    "gemini-3-flash-preview",
+    "gemini-2.0-flash",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash-lite",
+)
 
 
 def redis_is_configured():
@@ -154,9 +161,6 @@ def get_gemini_summary(news_data):
     # 💡 현재 날짜를 구해서 프롬프트에 넣어줍니다.
     today_date = datetime.now(KST).strftime("%Y년 %m월 %d일")
     
-    # 모델 우선순위 설정: 1순위 Gemini(고성능/20회), 2순위 Gemma(무제한급)
-    model_priority = ['gemini-2.5-flash', 'models/gemma-3-27b-it']
-    
     prompt = f"""
     역할 : 경제 및 금융 전문 애널리스트
     아래 뉴스 데이터를 분석해서 마크다운 형식으로 보고서를 작성해줘.
@@ -171,7 +175,7 @@ def get_gemini_summary(news_data):
     [뉴스 데이터]
     {news_data}
     """
-    for model_name in model_priority:
+    for model_name in GEMINI_MODEL_PRIORITY:
         try:
             # 모델 인스턴스 생성 및 호출
             model = genai.GenerativeModel(model_name)
@@ -181,15 +185,8 @@ def get_gemini_summary(news_data):
             return response.text
             
         except Exception as e:
-            error_msg = str(e)
-            
-            # 429(할당량 초과) 혹은 404(모델 없음)일 경우 다음 모델로 시도
-            if "429" in error_msg or "404" in error_msg:
-                print(f"⚠️ {model_name} 실패: 할당량 초과 혹은 모델 없음. 다음 모델로 전환합니다...")
-                continue
-            else:
-                # 그 외의 심각한 에러(네트워크 등)는 즉시 중단
-                return f"❌ API 호출 중 예외 발생: {e}"
+            print(f"⚠️ {model_name} 실패: {e}. 다음 모델로 전환합니다...")
+            continue
 
     return "❌ 모든 가용 모델의 호출에 실패했습니다."
 
@@ -220,14 +217,25 @@ async def create_and_save_report(news_items, indicators_md, analysis):
     site_url = f"https://4610162.github.io/daily_news/reports/{today_str}/"
     return site_url
 
+def build_fallback_telegram_brief(news_items):
+    top_items = news_items[:3]
+    if not top_items:
+        return "오늘 수집된 주요 뉴스가 없습니다."
+
+    return "\n".join(
+        f"{idx}. [{item['cat']}] {item['title']}"
+        for idx, item in enumerate(top_items, 1)
+    )
+
+
 # 텔레그램 상단에 노출할 3줄 핵심 요약 생성
-def get_telegram_brief(news_data):
+def get_telegram_brief(news_data, news_items):
     if not GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY가 설정되지 않았습니다.")
-        
+        print("⚠️ GEMINI_API_KEY가 없어 제목 기반 요약으로 대체합니다.")
+        return build_fallback_telegram_brief(news_items)
+
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('models/gemma-3-27b-it') # RPD 고려하여 gemma 3 27b 모델 사용
-    
+
     prompt = f"""
     다음 뉴스 데이터를 바탕으로 오늘 가장 중요한 경제 소식 3가지를 요약해줘.
     - 각 소식을 넘버링해서 한 줄로 작성할 것.
@@ -238,9 +246,17 @@ def get_telegram_brief(news_data):
     뉴스 데이터:
     {news_data}
     """
-    
-    response = model.generate_content(prompt)
-    return response.text.strip()
+
+    for model_name in GEMINI_MODEL_PRIORITY:
+        try:
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(prompt)
+            return response.text.strip()
+        except Exception as e:
+            print(f"⚠️ 텔레그램 요약 생성 실패 ({model_name}): {e}")
+
+    print("⚠️ 텔레그램 요약을 제목 기반 요약으로 대체합니다.")
+    return build_fallback_telegram_brief(news_items)
 
 def update_mkdocs_nav(report_date):
     """MkDocs용 mkdocs.yml 내비게이션 업데이트"""
@@ -319,7 +335,7 @@ async def main():
         indicators_raw = get_indicators_data()
         indicators_md = format_to_markdown(indicators_raw)
         full_analysis = get_gemini_summary(news_text_for_ai)
-        telegram_brief = get_telegram_brief(news_text_for_ai)
+        telegram_brief = get_telegram_brief(news_text_for_ai, news_items)
 
         today_str = datetime.now(KST).strftime("%Y-%m-%d")
         site_url = await create_and_save_report(news_items, indicators_md, full_analysis)
@@ -364,6 +380,7 @@ async def main():
 
     except Exception as e:
         print(f"❌ 실행 중 오류 발생: {e}")
+        raise
 
 if __name__ == "__main__":
     asyncio.run(main())

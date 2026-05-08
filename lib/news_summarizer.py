@@ -18,8 +18,13 @@ import os
 
 import google.generativeai as genai
 
-# 모델 우선순위: quota 절약을 위해 gemma 먼저, 실패 시 gemini-2.5-flash
-_MODEL_PRIORITY = ["models/gemma-3-27b-it", "gemini-2.5-flash"]
+_MODEL_PRIORITY = [
+    "gemini-2.5-flash",
+    "gemini-3-flash-preview",
+    "gemini-2.0-flash",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash-lite",
+]
 
 _SUMMARY_PROMPT_TEMPLATE = """You are a financial news analyst. A user asked: "{query}"
 
@@ -87,11 +92,7 @@ def summarize_news(query: str, articles: list) -> str:
             response = model.generate_content(prompt)
             return response.text.strip()
         except Exception as e:
-            error_msg = str(e)
-            if "429" in error_msg or "404" in error_msg:
-                print(f"[news_summarizer] {model_name} 실패 (quota/not found), 다음 모델 시도")
-                continue
             print(f"[news_summarizer] {model_name} 예외: {e}")
-            return f"❌ 요약 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+            continue
 
     return "❌ 현재 AI 서비스를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해주세요."

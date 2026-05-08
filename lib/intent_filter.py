@@ -46,6 +46,14 @@ _NON_NEWS_PATTERNS = [
 
 _non_news_re = [re.compile(p, re.IGNORECASE) for p in _NON_NEWS_PATTERNS]
 
+_MODEL_PRIORITY = [
+    "gemini-2.5-flash",
+    "gemini-3-flash-preview",
+    "gemini-2.0-flash",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash-lite",
+]
+
 
 def _keyword_match(text: str) -> bool:
     text_lower = text.lower()
@@ -62,7 +70,6 @@ def _is_obvious_non_news(text: str) -> bool:
 def _llm_classify(text: str) -> str:
     """
     불명확한 경우에만 호출되는 경량 LLM 분류기.
-    quota 절약을 위해 gemma-3-27b-it 사용.
     반환값: 'NEWS' | 'OTHER'
     """
     try:
@@ -73,7 +80,6 @@ def _llm_classify(text: str) -> str:
             return "NEWS"  # API 키 없으면 NEWS로 허용 (false negative 방지)
 
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("models/gemma-3-27b-it")
 
         prompt = (
             "Classify the following user message as NEWS or OTHER.\n\n"
@@ -87,13 +93,20 @@ def _llm_classify(text: str) -> str:
             f"Message: {text}"
         )
 
-        response = model.generate_content(prompt)
-        result = response.text.strip().upper()
-        return "NEWS" if "NEWS" in result else "OTHER"
+        for model_name in _MODEL_PRIORITY:
+            try:
+                model = genai.GenerativeModel(model_name)
+                response = model.generate_content(prompt)
+                result = response.text.strip().upper()
+                return "NEWS" if "NEWS" in result else "OTHER"
+            except Exception as e:
+                print(f"[intent_filter] {model_name} 분류 실패, 다음 모델 시도: {e}")
+                continue
 
     except Exception as e:
         print(f"[intent_filter] LLM 분류 실패, NEWS로 기본처리: {e}")
-        return "NEWS"  # 분류 실패 시 NEWS로 허용 (서비스 가용성 우선)
+
+    return "NEWS"  # 분류 실패 시 NEWS로 허용 (서비스 가용성 우선)
 
 
 def classify_intent(text: str) -> str:
