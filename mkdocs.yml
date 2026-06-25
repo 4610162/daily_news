@@ -5,6 +5,7 @@ theme:
 nav:
 - Home: index.md
 - Daily Reports:
+  - '2026-06-26': reports/2026-06-26.md
   - '2026-06-25': reports/2026-06-25.md
   - '2026-06-24': reports/2026-06-24.md
   - '2026-06-23': reports/2026-06-23.md
